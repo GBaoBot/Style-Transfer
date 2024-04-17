@@ -9,50 +9,56 @@ from tensorflow.keras.models import Model, Sequential
 
 import tensorflow.keras.backend as K
 from scipy.optimize import fmin_l_bfgs_b
+from ContentModel import VGG16_AvgPool, VGG16_AvgPool_Cutoff, unpreprocess, scale_img
+from StyleModel import gram_matrix, style_loss, run
 
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+def preprocess_img(img):
+    img_ = image.img_to_array(img)
+    img_ = np.expand_dims(img_, axis=0)
+    img_ = preprocess_input(img_)
 
-def VGG16_AvgPool(shape):
-    model = VGG16(input_shape=shape, weights='imagenet', include_top=False)
-    # Create a new model
-    i = model.input
-    x = i
-    for layer in model.layers:
-        if isinstance(layer, MaxPooling2D):
-            x = AveragePooling2D()(x)
-        else:
-            x = layer(x)
-    return Model(i, x)
+    return img_
 
-def VGG16_AvgPool_Cutoff(shape, n_conv):
-    if n_conv < 1 or n_conv > 13:
-        print('n_conv must be from 1 to 13!')
-        return
-    model = VGG16_AvgPool(shape)
-    output = None
-    n = 0
-    for layer in model.layers:
-        if isinstance(layer, Conv2D):
-            n += 1
-        if n >= n_conv:
-            output = model.output
-            break
-    return Model(model.input, output)
+with tf.device('/device:GPU:0'):
+    content_img_path = '/home/notomo/Documents/VSC/Models/Data/elephant.jpg'
+    style_img_path = '/home/notomo/Documents/VSC/Models/Data/starrynight.jpg'
 
-def unpreprocess(img):
-    img[..., 0] += 103.939
-    img[..., 1] += 116.779
-    img[..., 2] += 126.68
-    img = img[..., ::-1]
-    return img
+    # Input content image
+    content_img = image.load_img(content_img_path)
+    content_img = preprocess_img(content_img)
 
-def scale_img(x):
-    x = x - x.min()
-    x = x / x.max()
-    return x
+    # Collect shape (3 dimensions) and batch_shape(4 dimensions)
+    batch_shape = content_img.shape
+    shape = content_img.shape[1:]
+    h, w = content_img.shape[1:3]
 
-path = '/home/notomo/Documents/VSC/Models/Data/elephant.jpg'
-img = image.load_img(path)
+    # Input style image
+    style_img = image.load_img(style_img_path, target_size=shape(h, w))
+    style_img = preprocess_img(style_img)
 
-plt.imshow(img)
-plt.show()
+    vgg = VGG16_AvgPool(shape)
+
+    # Content Model
+    content_model = Model(vgg.input, vgg.layers[-1].get_output_at(0))
+    content_target = K.variable(content_model.predict(content_img))
+
+    # Style Model
+    symbolic_style_output = [layer.output for layer in vgg.layers if layer.name.endswith('conv1')]
+    multi_style_model = Model(vgg.input, symbolic_style_output)
+
+    style_target = [K.variable(y) for y in multi_style_model.predict(style_img)]
+    style_weights = [0.2,0.4,0.3,0.5,0.2]
+
+    loss_content = K.mean(K.square(content_target - content_model.output))
+    loss_style = 0
+    for output, target, w in zip(symbolic_style_output, style_target, style_weights):
+        loss_style += style_loss(target, output)
+
+    loss = loss_content + loss_style
+    grads = K.gradients(loss, vgg.input)
+
+    get_loss_and_grads = K.function(inputs=[vgg.input],
+                                    outputs=[loss] + grads)
+
+    # def get_loss_and_grads_wrapper(x_vec):
+    #     l, g = get_loss_and_grads()
