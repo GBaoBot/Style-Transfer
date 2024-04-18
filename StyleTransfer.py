@@ -35,41 +35,38 @@ with tf.device('/device:GPU:0'):
 
     # Input style image
     style_img = image.load_img(style_img_path, target_size=(h, w))
-    plt.imshow(style_img)
+    style_img = preprocess_img(style_img)
+
+    vgg = VGG16_AvgPool(shape)
+
+    # Content Model
+    content_model = Model(vgg.input, vgg.layers[13].get_output_at(0))
+    content_target = K.variable(content_model.predict(content_img))
+
+    # Style Model
+    symbolic_style_output = [layer.get_output_at(1) for layer in vgg.layers if layer.name.endswith('conv1')]
+    multi_style_model = Model(vgg.input, symbolic_style_output)
+
+    style_target = [K.variable(y) for y in multi_style_model.predict(style_img)]
+    style_weights = [0.2,0.4,0.3,0.5,0.2]
+
+    loss_content = K.mean(K.square(content_target - content_model.output))
+    loss_style = 0
+    for output, target, w in zip(symbolic_style_output, style_target, style_weights):
+        loss_style += w * style_loss(target[0], output[0])
+
+    loss = loss_content + loss_style
+    grads = K.gradients (loss, vgg.input)
+
+    get_loss_and_grads = K.function(inputs=[vgg.input],
+                                    outputs=[loss] + grads)
+
+    def get_loss_and_grads_wrapper(x_vec):
+        l, g = get_loss_and_grads([x_vec.reshape(*batch_shape)])
+        return l.astype(np.float64), g.flatten().astype(np.float64)
+    
+    losses = []
+    final_img = run(get_loss_and_grads_wrapper, 10, batch_shape)
+
+    plt.imshow(scale_img(final_img[0]))
     plt.show()
-    
-    # style_img = preprocess_img(style_img)
-
-    # vgg = VGG16_AvgPool(shape)
-
-    # # Content Model
-    # content_model = Model(vgg.input, vgg.layers[13].get_output_at(0))
-    # content_target = K.variable(content_model.predict(content_img))
-
-    # # Style Model
-    # symbolic_style_output = [layer.get_output_at(1) for layer in vgg.layers if layer.name.endswith('conv1')]
-    # multi_style_model = Model(vgg.input, symbolic_style_output)
-
-    # style_target = [K.variable(y) for y in multi_style_model.predict(style_img)]
-    # style_weights = [0.2,0.4,0.3,0.5,0.2]
-
-    # loss_content = K.mean(K.square(content_target - content_model.output))
-    # loss_style = 0
-    # for output, target, w in zip(symbolic_style_output, style_target, style_weights):
-    #     loss_style += w * style_loss(target[0], output[0])
-
-    # loss = loss_content + loss_style
-    # grads = K.gradients (loss, vgg.input)
-
-    # get_loss_and_grads = K.function(inputs=[vgg.input],
-    #                                 outputs=[loss] + grads)
-
-    # def get_loss_and_grads_wrapper(x_vec):
-    #     l, g = get_loss_and_grads([x_vec.reshape(*batch_shape)])
-    #     return l.astype(np.float64), g.flatten().astype(np.float64)
-    
-    # losses = []
-    # final_img = run(get_loss_and_grads_wrapper, 10, batch_shape)
-
-    # plt.imshow(scale_img(final_img[0]))
-    # plt.show()
