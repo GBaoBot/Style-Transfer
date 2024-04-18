@@ -1,6 +1,2 @@
 # Style-Transfer
-Implement models for style transfer with neural network
-
-## Subheader
-
-Hello, this is for testing
+In this project, I try to implement a neural style transfer model, utilizing model VGG16 and Keras API. The general idea is that we transform a random image close to both the content-image and the style-image simultaneously, by minimize the losses between the random-image with content-image and style-image. By this way, we combine all important features of both images at the same time.

@@ -16,24 +16,22 @@ from ContentModel import VGG16_AvgPool, unpreprocess, scale_img
 
 # Used for calculating style_loss
 def gram_matrix(img):
-    '''
-    img: batch of images, shape of (H, W, C)
-    return: gram matrix
-    '''
-
-    # The input is in shape of (H, W, C) where C is the feature maps
-    # To calculate, we need to transform it to 2D matrix, which is (C, H*W)
-    permuted_img = K.permute_dimensions(img, pattern=[2, 0, 1])
-    final_img = K.reshape(permuted_img, shape=(permuted_img.shape[0], -1))
-
-    # The formulation of gram matrix is XX^T / N
-    gram = K.dot(final_img, K.transpose(final_img)) / img.get_shape().num_elements()
-
-    return gram
+  # input is (H, W, C) (C = # feature maps)
+  # we first need to convert it to (C, H*W)
+  X = K.batch_flatten(K.permute_dimensions(img, (2, 0, 1)))
+  
+  # now, calculate the gram matrix
+  # gram = XX^T / N
+  # the constant is not important since we'll be weighting these
+  G = K.dot(X, K.transpose(X)) / img.get_shape().num_elements()
+  return G
 
 
 # Calculate style_loss
 def style_loss(target, actual):
+    '''
+    input must be in shape of (H, W, C)
+    '''
     loss = K.mean(K.square(gram_matrix(target) - gram_matrix(actual)))
     return loss
 
