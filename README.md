@@ -2,6 +2,7 @@
 In this project, I try to implement a neural style transfer model, utilizing model VGG16 and Keras API. The general idea is that we transform a random_image close to both the content_image and the style_image simultaneously, by minimizing the losses between the random_image with content_image and style_image. By this way, we combine all important features of both images at the same time.
 
 In total, there are 3 files: ContentModel.py, StyleModel.py, and StyleTransfer.py. The first 2 files is used to build content model and style model, and test them. All methods in these 2 files would be imported to the StyleTransfer.py to build the complete model. All images will be passed through the model and calculated the losses:
+
     Content_Loss = MSE(outputOfContentModel(content_image) _ outputContentModel(random_image))
     Style_Loss = MSE(outputStyleModel(style_image) - outputStyleModel(random_image))
 
